@@ -1026,8 +1026,8 @@ private struct ZipState<Value> {
 	var values: [Value] = []
 	var completed = false
 
-	var isFinished: Bool {
-		return values.isEmpty && completed
+	func isFinished(isEmpty: Bool) -> Bool {
+		return completed && values.isEmpty == isEmpty
 	}
 }
 
@@ -1041,22 +1041,26 @@ extension SignalType {
 			let disposable = CompositeDisposable()
 			
 			let flush = {
-				var (leftOriginal, rightOriginal) = states.modify { states in
+				var tuple: (Value, U)?
+				let (leftOriginal, rightOriginal) = states.modify { states in
 					var (left, right) = states
-					let extractCount = min(left.values.count, right.values.count)
-					
-					left.values.removeRange(0 ..< extractCount)
-					right.values.removeRange(0 ..< extractCount)
+					guard !left.values.isEmpty && !right.values.isEmpty else {
+						return states
+					}
+
+					tuple = (left.values.removeFirst(), right.values.removeFirst())
 					return (left, right)
 				}
-				
-				while !leftOriginal.values.isEmpty && !rightOriginal.values.isEmpty {
-					let left = leftOriginal.values.removeAtIndex(0)
-					let right = rightOriginal.values.removeAtIndex(0)
-					observer.sendNext((left, right))
+
+				let areBothEmpty: Bool
+				if let tuple = tuple {
+					areBothEmpty = false
+					observer.sendNext(tuple)
+				} else {
+					areBothEmpty = true
 				}
-				
-				if leftOriginal.isFinished || rightOriginal.isFinished {
+
+				if leftOriginal.isFinished(areBothEmpty) || rightOriginal.isFinished(areBothEmpty) {
 					observer.sendCompleted()
 				}
 			}
